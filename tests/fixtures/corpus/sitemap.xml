@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://docs.larch.example/guides/getting-started</loc></url>
+  <url><loc>https://docs.larch.example/guides/authentication</loc></url>
+  <url><loc>https://docs.larch.example/guides/syncing</loc></url>
+  <url><loc>https://docs.larch.example/guides/sharing</loc></url>
+  <url><loc>https://docs.larch.example/guides/backups</loc></url>
+  <url><loc>https://docs.larch.example/api/overview</loc></url>
+  <url><loc>https://docs.larch.example/api/sessions</loc></url>
+  <url><loc>https://docs.larch.example/api/notes</loc></url>
+  <url><loc>https://docs.larch.example/api/webhooks</loc></url>
+  <url><loc>https://docs.larch.example/faq/billing</loc></url>
+  <url><loc>https://docs.larch.example/faq/security</loc></url>
+  <url><loc>https://docs.larch.example/faq/troubleshooting</loc></url>
+</urlset>
