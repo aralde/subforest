@@ -41,9 +41,10 @@ class BuildResult:
 
     nodes: list[Node]
     chunks: list[Chunk]
+    texts: dict[int, str] = field(default_factory=dict)
 
     def write(self, store: TreeStore) -> None:
-        """Insert every node and chunk into `store`.
+        """Insert every node, chunk and document text into `store`.
 
         Example:
             >>> store = TreeStore()
@@ -53,6 +54,7 @@ class BuildResult:
         """
         store.add_nodes(self.nodes)
         store.add_chunks(self.chunks)
+        store.add_doc_texts(self.texts)
 
 
 @dataclass
@@ -73,6 +75,7 @@ class _Emitter:
         self.max_chunk_chars = max_chunk_chars
         self.nodes: list[Node] = []
         self.chunks: list[Chunk] = []
+        self.texts: dict[int, str] = {}
 
     def node(self, parent_id: int | None, kind: NodeKind, title: str, order: int, **kw: object) -> int:
         node_id = len(self.nodes) + 1
@@ -116,6 +119,7 @@ class _Emitter:
         md = parse_markdown(doc.text)
         title = md.title or _stem(doc.parts[-1])
         node_id = self.node(parent_id, "doc", title, order, span=(0, len(doc.text)), **loc)
+        self.texts[node_id] = doc.text
         self.chunk(node_id, doc.text, md.body)
         for i, section in enumerate(md.sections):
             self.section(section, doc.text, node_id, i)
@@ -166,4 +170,4 @@ def assemble(
     emit = _Emitter(corpus_id, max_chunk_chars)
     site_id = emit.node(None, "site", site_title or f"{corpus_id}/", 0, url=site_url)
     emit.entries(root, site_id)
-    return BuildResult(emit.nodes, emit.chunks)
+    return BuildResult(emit.nodes, emit.chunks, emit.texts)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from types import TracebackType
 from typing import Self
@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS chunks (
     "end" INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS chunks_node ON chunks(node_id, start);
+CREATE TABLE IF NOT EXISTS doc_texts (
+    node_id INTEGER PRIMARY KEY REFERENCES nodes(id),
+    text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS nodes_path ON nodes(corpus_id, path);
 """
 
 _NODE_COLS = "id, corpus_id, parent_id, kind, title, url, path, ord, span_start, span_end"
@@ -154,6 +159,48 @@ class TreeStore:
             self._conn.executemany(
                 'INSERT INTO chunks (id, node_id, text, start, "end") VALUES (?, ?, ?, ?, ?)', rows
             )
+
+    def add_doc_texts(self, texts: Mapping[int, str]) -> None:
+        """Store the full source text of document nodes, so tools can read sections with their headings.
+
+        Example:
+            >>> store = TreeStore()
+            >>> store.add_nodes([Node(id=1, corpus_id="c", kind="doc", title="Auth")])
+            >>> store.add_doc_texts({1: "# Auth"})
+            >>> store.doc_text(1)
+            '# Auth'
+        """
+        with self._conn:
+            self._conn.executemany("INSERT INTO doc_texts (node_id, text) VALUES (?, ?)", texts.items())
+
+    def doc_text(self, node_id: int) -> str | None:
+        """Return the stored source text of a document node, or `None` if it has none.
+
+        Example:
+            >>> TreeStore().doc_text(1) is None
+            True
+        """
+        row = self._conn.execute("SELECT text FROM doc_texts WHERE node_id = ?", (node_id,)).fetchone()
+        return None if row is None else str(row["text"])
+
+    def find_by_path(self, path: str, corpus_id: str | None = None) -> Node | None:
+        """Return the node stored with this exact relative `path` (first by id if several corpora share it).
+
+        This is a database lookup only; it never touches the filesystem.
+
+        Example:
+            >>> store = TreeStore()
+            >>> store.add_nodes([Node(id=1, corpus_id="c", kind="doc", title="Auth", path="guides/auth.md")])
+            >>> store.find_by_path("guides/auth.md").id
+            1
+        """
+        sql = f"SELECT {_NODE_COLS} FROM nodes WHERE path = ?"
+        params: tuple[str, ...] = (path,)
+        if corpus_id is not None:
+            sql += " AND corpus_id = ?"
+            params = (path, corpus_id)
+        row = self._conn.execute(sql + " ORDER BY id LIMIT 1", params).fetchone()
+        return None if row is None else _row_to_node(row)
 
     def get_node(self, node_id: int) -> Node:
         """Return a node by id; raise `KeyError` if it does not exist.
