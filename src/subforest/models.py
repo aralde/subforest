@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 NodeKind = Literal["site", "dir", "doc", "section"]
 
@@ -97,7 +98,9 @@ class SubForest(_Frozen):
     """The retrieval-induced sub-forest: hit nodes plus all their ancestors.
 
     `nodes` maps node id to node, `roots` lists top-level node ids in display order and
-    `hit_marks` maps node id to the number of hits landing directly on that node.
+    `hit_marks` maps node id to the number of hits landing directly on that node. `scores` sums the hit
+    scores landing directly on each node, and `child_counts` gives each node's total number of children in
+    the full tree, so a renderer can say how many siblings it collapsed.
 
     Example:
         >>> root = Node(id=1, corpus_id="docs", kind="site", title="docs/")
@@ -108,10 +111,27 @@ class SubForest(_Frozen):
     roots: list[int]
     nodes: dict[int, Node]
     hit_marks: dict[int, int]
+    scores: dict[int, float] = Field(default_factory=dict)
+    child_counts: dict[int, int] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _check(self) -> Self:
-        missing = [i for i in [*self.roots, *self.hit_marks] if i not in self.nodes]
+        ids = [*self.roots, *self.hit_marks, *self.scores, *self.child_counts]
+        missing = [i for i in ids if i not in self.nodes]
         if missing:
             raise ValueError(f"unknown node ids: {missing}")
         return self
+
+    def render(self, budget_tokens: int, estimator: Callable[[str], int] | None = None) -> str:
+        """Render the compact outline an agent sees after `search`, within `budget_tokens`.
+
+        See `subforest.render.render` for the collapsing rules.
+
+        Example:
+            >>> root = Node(id=1, corpus_id="docs", kind="site", title="docs/")
+            >>> SubForest(roots=[1], nodes={1: root}, hit_marks={}).render(100)
+            'docs/ (site)'
+        """
+        from subforest.render import render
+
+        return render(self, budget_tokens, estimator)
