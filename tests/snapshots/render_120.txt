@@ -1,0 +1,18 @@
+docs/ (site)
+  api/ [n2]
+    Sessions [n10] ● 1 hit
+      Create a session [n11] ● 1 hit
+      … +2 sections
+    … +3 more
+  faq/ [n18]
+    Security FAQ [n22] ● 1 hit
+      What happens if my token leaks? [n24] ● 1 hit
+      … +1 section
+    … +2 more
+  guides/ [n28]
+    Authentication [n29] ●●●●● 5 hits
+      Tokens [n30] ●● 2 hits
+        … +1 section
+      … +3 sections
+    … +4 more
+… 2 more docs with weaker hits (call search with more_results=true)

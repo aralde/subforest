@@ -81,6 +81,16 @@ class TreeStore:
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(_SCHEMA)
 
+    @property
+    def connection(self) -> sqlite3.Connection:
+        """The underlying SQLite connection, for adapters that add their own tables (e.g. FTS5).
+
+        Example:
+            >>> TreeStore().connection.execute("SELECT count(*) FROM nodes").fetchone()[0]
+            0
+        """
+        return self._conn
+
     def __enter__(self) -> Self:
         return self
 
@@ -212,6 +222,30 @@ class TreeStore:
         self.get_node(node_id)
         rows = self._conn.execute(_ANCESTORS, (node_id,)).fetchall()
         return [_row_to_node(r) for r in rows]
+
+    def child_counts(self, node_ids: Iterable[int]) -> dict[int, int]:
+        """Return how many direct children each of the given nodes has (0 for leaves).
+
+        Example:
+            >>> store = TreeStore()
+            >>> store.add_nodes([
+            ...     Node(id=1, corpus_id="c", kind="doc", title="Auth"),
+            ...     Node(id=2, corpus_id="c", parent_id=1, kind="section", title="A"),
+            ... ])
+            >>> store.child_counts([1, 2])
+            {1: 1, 2: 0}
+        """
+        ids = list(dict.fromkeys(node_ids))
+        counts = dict.fromkeys(ids, 0)
+        for start in range(0, len(ids), 500):
+            batch = ids[start : start + 500]
+            marks = ", ".join("?" * len(batch))
+            rows = self._conn.execute(
+                f"SELECT parent_id, count(*) FROM nodes WHERE parent_id IN ({marks}) GROUP BY parent_id",
+                batch,
+            )
+            counts.update({parent: n for parent, n in rows})
+        return counts
 
     def chunks(self, node_id: int) -> list[Chunk]:
         """Return the chunks owned by a node, in text order.
