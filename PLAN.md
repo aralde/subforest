@@ -15,13 +15,15 @@ Status legend: `[ ]` pending · `[x]` done. Update as you go.
 _Status: all checks pass locally on 3.11 and 3.12; CI runs on GitHub once the remote exists._
 
 ## M1 — Tree builders
-- [ ] `build.markdown`: headings → section nodes with character spans; front-matter title support
-- [ ] `build.paths`: directory / URL path hierarchy → inter-doc nodes
-- [ ] `build.sitemap`: parse `sitemap.xml` into the same hierarchy
-- [ ] Chunker: split section bodies into chunks that never cross a section boundary
-- [ ] CLI: `subforest build <path|sitemap-url-file> --db corpus.db`
+- [x] `build.markdown`: headings → section nodes with character spans; front-matter title support
+- [x] `build.paths`: directory / URL path hierarchy → inter-doc nodes
+- [x] `build.sitemap`: parse `sitemap.xml` into the same hierarchy
+- [x] Chunker: split section bodies into chunks that never cross a section boundary
+- [x] CLI: `subforest build <path|sitemap-url-file> --db corpus.db`
 
 **Accept:** building the fixture corpus yields a deterministic tree (snapshot test).
+
+_Status: done — `tests/snapshots/fixture_tree.txt`; regenerate with `SUBFOREST_UPDATE_SNAPSHOTS=1`._
 
 ## M2 — Retrieval + induction (the core)
 - [ ] `Retriever` protocol: `search(query, k) -> list[Hit]`
