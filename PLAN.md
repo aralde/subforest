@@ -38,15 +38,17 @@ _Status: done — `tests/snapshots/fixture_tree.txt`; regenerate with `SUBFOREST
 _Status: done — goldens in `tests/snapshots/render_{400,120,60}.txt`; try it with `subforest search`._
 
 ## M3 — Agent tools + policy layer
-- [ ] Tools: `search(query, more_results=False)`, `expand(node_id, depth=1)`, `read(node_id, max_tokens)`,
+- [x] Tools: `search(query, more_results=False)`, `expand(node_id, depth=1)`, `read(node_id, max_tokens)`,
       `siblings(node_id)`, `outline(doc_id)`; all return text + structured payload
-- [ ] `policy`: YAML/dict rules evaluated against per-turn state. Rule types for MVP:
+- [x] `policy`: YAML/dict rules evaluated against per-turn state. Rule types for MVP:
       `require_before` (tool A needs ≥N calls of tool B in scope), `max_calls`, `cooldown`.
       Violations return a short, instructive message instead of executing.
-- [ ] Example policy file reproducing "read before semantic search"
-- [ ] Path-safety tests (traversal, symlink escape)
+- [x] Example policy file reproducing "read before semantic search"
+- [x] Path-safety tests (traversal, symlink escape)
 
 **Accept:** a scripted fake agent run exercises every tool and one blocked call.
+
+_Status: done — `tests/test_fake_agent.py` (two blocked calls: require_before and cooldown)._
 
 ## M4 — MCP server
 - [ ] `subforest[mcp]` extra; stdio server exposing the M3 tools; `subforest serve --db corpus.db --policy p.yaml`
