@@ -1,0 +1,9 @@
+docs/ (site)
+  guides/ [n28]
+    Authentication [n29] ●●●●● 5 hits
+      Tokens [n30] ●● 2 hits
+        … +1 section
+      … +3 sections
+    … +4 more
+  … +2 more
+… 4 more docs with weaker hits (call search with more_results=true)
