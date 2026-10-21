@@ -26,14 +26,16 @@ _Status: all checks pass locally on 3.11 and 3.12; CI runs on GitHub once the re
 _Status: done — `tests/snapshots/fixture_tree.txt`; regenerate with `SUBFOREST_UPDATE_SNAPSHOTS=1`._
 
 ## M2 — Retrieval + induction (the core)
-- [ ] `Retriever` protocol: `search(query, k) -> list[Hit]`
-- [ ] `retrievers.fts5`: SQLite FTS5 BM25 over chunks (default)
-- [ ] `induce(hits) -> SubForest`: map hits → nodes, add ancestors, union across docs, aggregate hit counts/scores
-- [ ] `render(subforest, budget_tokens)`: rendering contract from `CLAUDE.md`; collapse low-signal siblings first,
+- [x] `Retriever` protocol: `search(query, k) -> list[Hit]`
+- [x] `retrievers.fts5`: SQLite FTS5 BM25 over chunks (default)
+- [x] `induce(hits) -> SubForest`: map hits → nodes, add ancestors, union across docs, aggregate hit counts/scores
+- [x] `render(subforest, budget_tokens)`: rendering contract from `CLAUDE.md`; collapse low-signal siblings first,
       then whole weak docs; never cut a line mid-node
-- [ ] Token estimator: simple heuristic by default, pluggable
+- [x] Token estimator: simple heuristic by default, pluggable
 
 **Accept:** golden-file tests for render at 3 budgets; induced forest always contains every hit's ancestors.
+
+_Status: done — goldens in `tests/snapshots/render_{400,120,60}.txt`; try it with `subforest search`._
 
 ## M3 — Agent tools + policy layer
 - [ ] Tools: `search(query, more_results=False)`, `expand(node_id, depth=1)`, `read(node_id, max_tokens)`,
