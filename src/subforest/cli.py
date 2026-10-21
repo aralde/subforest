@@ -1,4 +1,4 @@
-"""Command-line interface: `subforest build` and `subforest search`."""
+"""Command-line interface: `subforest build`, `subforest search` and `subforest serve`."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 
 from subforest.build import build_corpus
 from subforest.induce import induce
+from subforest.policy import Policy
 from subforest.retrievers import FTS5Retriever
 from subforest.store import TreeStore
 
@@ -47,6 +48,21 @@ def _search(args: argparse.Namespace) -> int:
     return 0
 
 
+def _serve(args: argparse.Namespace) -> int:
+    db: Path = args.db
+    if not db.exists():
+        print(f"error: {db} does not exist (run subforest build first)", file=sys.stderr)
+        return 2
+    try:
+        from subforest.mcp import serve
+    except ImportError:
+        print("error: the MCP server needs the extra: pip install 'subforest[mcp]'", file=sys.stderr)
+        return 2
+    policy = Policy.load(args.policy) if args.policy else None
+    serve(db, policy=policy, budget_tokens=args.budget, turn_idle_seconds=args.turn_idle_seconds)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return its exit code.
 
@@ -69,6 +85,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     search.add_argument("-k", type=int, default=10, help="number of chunk hits to induce from")
     search.add_argument("--budget", type=int, default=400, help="token budget for the rendered view")
     search.set_defaults(func=_search)
+    serve = sub.add_parser("serve", help="serve the agent tools as an MCP server over stdio")
+    serve.add_argument("--db", type=Path, required=True, help="SQLite file created by subforest build")
+    serve.add_argument("--policy", type=Path, help="tool-order policy (.yaml, .yml or .json)")
+    serve.add_argument("--budget", type=int, default=400, help="token budget for search / expand views")
+    serve.add_argument(
+        "--turn-idle-seconds",
+        type=float,
+        default=120.0,
+        help="a pause this long between calls starts a new policy turn",
+    )
+    serve.set_defaults(func=_serve)
     args = parser.parse_args(argv)
     code: int = args.func(args)
     return code
