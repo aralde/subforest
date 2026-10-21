@@ -16,6 +16,11 @@ dependencies = [
 [project.scripts]
 subforest = "subforest.cli:main"
 
+[project.optional-dependencies]
+yaml = [
+    "pyyaml>=6.0.3",
+]
+
 [build-system]
 requires = ["uv_build>=0.13.4,<0.14.0"]
 build-backend = "uv_build"
@@ -24,7 +29,9 @@ build-backend = "uv_build"
 dev = [
     "mypy>=2.4.0",
     "pytest>=9.1.1",
+    "pyyaml>=6.0.3",
     "ruff>=0.17.1",
+    "types-pyyaml>=6.0.12.20260906",
 ]
 
 [tool.ruff]
@@ -33,6 +40,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+allowed-confusables = ["›"]
 
 [tool.mypy]
 strict = true
@@ -42,3 +50,4 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["src", "tests"]
 addopts = "--doctest-modules"
+doctest_optionflags = ["ELLIPSIS"]
