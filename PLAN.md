@@ -51,11 +51,13 @@ _Status: done — goldens in `tests/snapshots/render_{400,120,60}.txt`; try it w
 _Status: done — `tests/test_fake_agent.py` (two blocked calls: require_before and cooldown)._
 
 ## M4 — MCP server
-- [ ] `subforest[mcp]` extra; stdio server exposing the M3 tools; `subforest serve --db corpus.db --policy p.yaml`
-- [ ] README snippet for adding it to Claude Code (`claude mcp add …`) and other MCP clients
-- [ ] Manual smoke test against the fixture corpus from a real MCP client; record result in `docs/decisions.md`
+- [x] `subforest[mcp]` extra; stdio server exposing the M3 tools; `subforest serve --db corpus.db --policy p.yaml`
+- [x] README snippet for adding it to Claude Code (`claude mcp add …`) and other MCP clients
+- [x] Manual smoke test against the fixture corpus from a real MCP client; record result in `docs/decisions.md`
 
 **Accept:** tools listed and callable from an MCP client.
+
+_Status: done — `tests/test_mcp.py` (in-process and stdio subprocess) + Claude Code smoke test in `docs/decisions.md`._
 
 ## M5 — Eval harness (the headline)
 Validate in tiers, cheapest first; only spend on tier 3 once tiers 1–2 look right.
