@@ -1,0 +1,16 @@
+# Make the agent look at real text before reaching for a broader semantic search,
+# and keep it from re-searching without inspecting what it already found.
+rules:
+  - type: require_before
+    tool: semantic_search
+    requires: read
+    min_calls: 1
+    message: >-
+      Blocked: read at least one node from your search results before using semantic_search.
+      Pick the most promising node from the outline, e.g. read("n31").
+  - type: cooldown
+    tool: search
+    calls: 1
+  - type: max_calls
+    tool: search
+    limit: 4

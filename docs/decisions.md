@@ -25,3 +25,13 @@ One line per decision: date — decision — reason.
 - 2026-10-21 — Weakness = (summed BM25 score, hit count, newer id first) — uses only what the retriever gives us; deterministic.
 - 2026-10-21 — Default token estimator is `ceil(chars / 4)`, pluggable via `estimator` — no tokenizer dependency in core.
 - 2026-10-21 — Added `subforest search "<query>" --db … --budget N` to the CLI — quickest way to eyeball the view an agent gets; `build` now also creates the FTS5 index.
+- 2026-10-21 — Builds store each document's full source text (`doc_texts` table); `read` slices it by the node span — sections come back with their headings, and tools never open files, so path arguments cannot reach the filesystem.
+- 2026-10-21 — Tools accept node ids as `n31`, `31` or `31` (int), and documents also by corpus-relative path (looked up in the DB; `..`, absolute, `~` and drive paths rejected) — agents copy ids from the outline; paths help when they know a file.
+- 2026-10-21 — Tool errors and policy blocks are returned as `ToolResult(error|blocked=True)` with an instructive text, never raised through `Toolkit.call` — the agent can recover in its next step.
+- 2026-10-21 — Policy rules are scoped to the current turn (`Toolkit.new_turn()` resets); blocked calls do not count as calls — matches "per-turn state" in the plan; keeps rules predictable.
+- 2026-10-21 — Cooldown means "N other calls since the last use of the tool" — expresses "inspect results before searching again" without timestamps.
+- 2026-10-21 — Harness tools (e.g. `semantic_search`) plug in via `Toolkit(extra_tools=…)` so the same policy governs them — the "read before semantic search" example needs a tool subforest does not ship.
+- 2026-10-21 — YAML policies need the `subforest[yaml]` extra (PyYAML); JSON works with the core install — keeps the core free of non-stdlib parsers beyond pydantic.
+- 2026-10-21 — `search(more_results=True)` uses `more_k` hits (default 30) and twice the render budget — the footer promise "more docs with weaker hits" must actually surface them.
+- 2026-10-21 — `read` over budget: node's own text + list of subsections; if still too long, cut at a paragraph boundary with an explicit note — collapse first, truncate only as a last resort and say so.
+- 2026-10-21 — `expand`/`outline` show `(+N)` for children beyond the shown depth and reduce depth until the view fits the budget — same collapse-not-truncate rule as `render`.
