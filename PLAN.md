@@ -3,14 +3,16 @@
 Status legend: `[ ]` pending · `[x]` done. Update as you go.
 
 ## M0 — Scaffold and data model
-- [ ] `uv init --lib`, `src/subforest/`, MIT `LICENSE` (holder: Ariel / aralde), `README.md` stub with paper attribution
-- [ ] ruff, mypy strict, pytest configured; GitHub Actions CI (lint, types, tests on 3.11 and 3.12)
-- [ ] Models: `Node`, `Chunk`, `Hit`, `SubForest` (pydantic) + `TreeStore` on SQLite (nodes table, closure or
+- [x] `uv init --lib`, `src/subforest/`, MIT `LICENSE` (holder: Ariel / aralde), `README.md` stub with paper attribution
+- [x] ruff, mypy strict, pytest configured; GitHub Actions CI (lint, types, tests on 3.11 and 3.12)
+- [x] Models: `Node`, `Chunk`, `Hit`, `SubForest` (pydantic) + `TreeStore` on SQLite (nodes table, closure or
       parent-pointer + recursive CTE for ancestors)
-- [ ] Fixture corpus in `tests/fixtures/corpus/`: ~12 Markdown files across 3 folders + a `sitemap.xml`
-- [ ] Confirm `subforest` is free on PyPI (`pip index versions subforest`); if taken, stop and report
+- [x] Fixture corpus in `tests/fixtures/corpus/`: ~12 Markdown files across 3 folders + a `sitemap.xml`
+- [x] Confirm `subforest` is free on PyPI (`pip index versions subforest`); if taken, stop and report
 
 **Accept:** CI green; `TreeStore.ancestors(node_id)` tested.
+
+_Status: all checks pass locally on 3.11 and 3.12; CI runs on GitHub once the remote exists._
 
 ## M1 — Tree builders
 - [ ] `build.markdown`: headings → section nodes with character spans; front-matter title support
