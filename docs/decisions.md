@@ -35,3 +35,8 @@ One line per decision: date — decision — reason.
 - 2026-10-21 — `search(more_results=True)` uses `more_k` hits (default 30) and twice the render budget — the footer promise "more docs with weaker hits" must actually surface them.
 - 2026-10-21 — `read` over budget: node's own text + list of subsections; if still too long, cut at a paragraph boundary with an explicit note — collapse first, truncate only as a last resort and say so.
 - 2026-10-21 — `expand`/`outline` show `(+N)` for children beyond the shown depth and reduce depth until the view fits the budget — same collapse-not-truncate rule as `render`.
+- 2026-10-21 — MCP server built on `mcp>=2.3` (`MCPServer`, stdio) in the `subforest[mcp]` extra; tools are registered as `async` functions — mcp 2 runs sync tools in worker threads, and the SQLite connection belongs to the serving thread.
+- 2026-10-21 — MCP tool results carry the text both as text content and as `structuredContent.text` (plus the JSON payload); errors and policy blocks set `isError` — the Claude Code smoke test showed the client passes only structured content to the model when present.
+- 2026-10-21 — MCP policy turns reset after `--turn-idle-seconds` (default 120) without calls — MCP has no turn boundary; an idle gap is the simplest proxy.
+- 2026-10-21 — CI installs all extras (`uv sync --all-extras`) so mypy and tests cover the MCP server — extras stay optional for users.
+- 2026-10-21 — M4 smoke test (Claude Code 2.1.299, `claude -p --mcp-config`, fixture corpus): all 5 tools listed; search → read n30 → expand n29 → read n24, n34; answered "90 days; create new, deploy, revoke old" with citations. First run failed (model saw only structured payload without text) — fixed as above, then passed.
