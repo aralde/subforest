@@ -60,36 +60,40 @@ _Status: done — `tests/test_fake_agent.py` (two blocked calls: require_before 
 _Status: done — `tests/test_mcp.py` (in-process and stdio subprocess) + Claude Code smoke test in `docs/decisions.md`._
 
 ## M5 — Eval harness (the headline)
-Validate in tiers, cheapest first; only spend on tier 3 once tiers 1–2 look right.
+The approach itself is validated in the RIT-RAG paper (chunks → sub-forest: +4.5 to +10.5 points on WixQA,
++2.4 to +3.5 on QASPER, same retriever/model/10-call budget). Our job is to check that **this implementation** shows
+the effect under our conditions (BM25, current Claude models, MCP), not to re-run the paper. Cheapest first.
+
+Reference settings from the paper: ≤10 tool calls per question, ~50 nodes in the induced view.
 
 ### Tier 1 — Scale (no LLM)
-- [ ] `docs/datasets.md`: licenses for WixQA, QASPER (FinanceBench later: long PDFs are out of MVP scope)
-- [ ] Download scripts (no data committed) + loaders into `TreeStore`
-- [ ] `subforest bench`: build time, DB size, p50/p95 latency of search / induce / render on a corpus of thousands
-      of docs; two builds produce identical databases
+- [ ] `docs/datasets.md`: licenses for WixQA (MIT) and QASPER (CC BY 4.0); FinanceBench later (long PDFs, out of MVP)
+- [ ] `subforest data fetch wixqa|qasper`: download (no data committed) + build `corpus.db` and normalized questions
+- [ ] `subforest bench <dataset>`: build time, DB size, p50/p95 latency of search / induce / render; two builds
+      produce identical databases
 
 ### Tier 2 — Evidence coverage (no LLM)
-- [ ] At equal token budget, does the agent's first view contain the gold evidence (as text, or as a node reachable
-      by `expand`/`read`)? `chunks` (top-k texts) vs `subforest` (rendered view), on QASPER evidence annotations
-- [ ] Report coverage per budget; if subforest does not beat chunks here, fix rendering before tier 3
+- [ ] `subforest coverage <dataset>`: at equal token budgets, does the first view contain the gold evidence?
+      `chunks` (top-k texts) vs `subforest` (rendered view, evidence reachable with one `read`)
+- [ ] Reports in `reports/`; if subforest does not beat chunks here, fix rendering before tier 3
 
-### Tier 3 — Agent ablation (paid)
-- [ ] Agent loop with pluggable LLM provider (Anthropic default via `subforest[eval]`)
-- [ ] Two arms, identical retriever and model: `chunks` (top-k chunk texts) vs `subforest` (induced view + tools)
-- [ ] Metrics: answer accuracy (LLM judge, prompt in repo), tokens in/out, tool calls, latency; JSONL logs per run
-- [ ] Cost estimate + confirmation before each run; `--max-cost` hard stop
-- [ ] Pilot: ~30 questions with a cheap model to debug the loop
-- [ ] Judge check: ~40 answers labelled by hand; judge agreement ≥ 85% or fix the judge prompt
-- [ ] `subforest eval --dataset wixqa --arm both --n 300` → markdown report in `reports/` with paired significance
-      (McNemar / bootstrap) and confidence intervals
-- [ ] Long runs execute on server-peanuts (cloud sessions are reclaimed when idle)
+### Tier 3 — Agent replication (paid, small)
+- [ ] Agent loop with two runners: `claude-code` (subscription, `claude -p` + MCP) and `api` (`subforest[eval]`)
+- [ ] Two arms, identical retriever, model and call budget: `chunks` vs `subforest`
+- [ ] Metrics: answer accuracy (LLM judge, prompt in repo), tokens in/out, tool calls, latency; JSONL per run,
+      resumable; cost estimate + confirmation; `--max-cost` hard stop
+- [ ] Pilot: ~30 questions via the `claude-code` runner (subscription) to debug the loop
+- [ ] Judge check: ~40 answers labelled by hand; agreement ≥ 85% or fix the judge prompt
+- [ ] Replication: all 200 WixQA expert-written questions, both arms, Claude Haiku 5.5 via API (~$5–10)
+- [ ] Later, only if needed: QASPER (effect ~3 points, needs many questions) and a Sonnet confirmation
 
-### Tier 4 — Dogfooding (qualitative)
-- [ ] Use the MCP server from Claude Code on a real docs corpus we know well; note findings in `docs/decisions.md`
+### Tier 4 — Dogfooding (qualitative, the corporate argument)
+- [ ] Run the MCP server from Claude Code on a real docs corpus (ours or a prospect's) with 50–100 questions written
+      by people who know it; note findings in `docs/decisions.md`
 
-**Accept:** a reproducible run on ≥300 questions with both arms, judge validated, and a report table with
-confidence intervals. Stop rule: if subforest does not beat chunks beyond the CI on any dataset after a couple of
-render iterations, do not publish an accuracy claim; document the result honestly.
+**Accept:** WixQA replication report with both arms, paired significance and confidence intervals, judge validated.
+Stop rule: if subforest does not beat chunks beyond the CI after a couple of render iterations, do not publish an
+accuracy claim; document the result honestly.
 
 ## M6 — Release
 - [ ] README: problem, 30-second demo, eval table, honest limitations, attribution to the paper
