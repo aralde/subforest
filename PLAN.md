@@ -67,15 +67,17 @@ the effect under our conditions (BM25, current Claude models, MCP), not to re-ru
 Reference settings from the paper: ≤10 tool calls per question, ~50 nodes in the induced view.
 
 ### Tier 1 — Scale (no LLM)
-- [ ] `docs/datasets.md`: licenses for WixQA (MIT) and QASPER (CC BY 4.0); FinanceBench later (long PDFs, out of MVP)
-- [ ] `subforest data fetch wixqa|qasper`: download (no data committed) + build `corpus.db` and normalized questions
-- [ ] `subforest bench <dataset>`: build time, DB size, p50/p95 latency of search / induce / render; two builds
+- [x] `docs/datasets.md`: licenses for WixQA (MIT) and QASPER (CC BY 4.0); FinanceBench later (long PDFs, out of MVP)
+- [x] `subforest data fetch wixqa|qasper`: download (no data committed) + build `corpus.db` and normalized questions
+- [x] `subforest bench <dataset>`: build time, DB size, p50/p95 latency of search / induce / render; two builds
       produce identical databases
 
 ### Tier 2 — Evidence coverage (no LLM)
-- [ ] `subforest coverage <dataset>`: at equal token budgets, does the first view contain the gold evidence?
+- [x] `subforest coverage <dataset>`: at equal token budgets, does the first view contain the gold evidence?
       `chunks` (top-k texts) vs `subforest` (rendered view, evidence reachable with one `read`)
-- [ ] Reports in `reports/`; if subforest does not beat chunks here, fix rendering before tier 3
+- [x] Reports in `reports/`; if subforest does not beat chunks here, fix rendering before tier 3
+
+_Status: tiers 1–2 done, gate passed — see `reports/README.md`._
 
 ### Tier 3 — Agent replication (paid, small)
 - [ ] Agent loop with two runners: `claude-code` (subscription, `claude -p` + MCP) and `api` (`subforest[eval]`)
