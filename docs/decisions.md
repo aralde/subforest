@@ -47,3 +47,7 @@ One line per decision: date — decision — reason.
 - 2026-10-28 — Coverage compares first views at equal estimated tokens: chunks = top-k chunk texts (with a title line) until the budget is full; subforest = rendered view. Evidence counts for subforest only if a shown node contains it and fits one `read` (≤ 800 tokens) — makes the "one extra call" asymmetry explicit instead of hiding it.
 - 2026-10-28 — QASPER coverage reported for raw and title-prefixed questions — raw QASPER questions are ambiguous across 416 papers; both numbers are shown rather than picking the flattering one.
 - 2026-10-28 — Tier 2 gate passed (subforest ≥ chunks on doc coverage everywhere, on evidence when the question is specific) — proceed to tier 3.
+- 2026-10-29 — Tier 3 runs on the Claude subscription (`claude -p`, Haiku) instead of the API — owner chose zero spend; a probe showed ~11k input tokens and ~12 s per run, small against Pro limits.
+- 2026-10-29 — No LLM judge in tier 3; score "saw gold-doc text", "gold doc shown" and token F1 — WixQA gives gold docs per question, so retrieval success is measurable for free; answer accuracy stays the paper's claim, not ours.
+- 2026-10-29 — "Saw gold-doc text" counts chunks shown by a chunks-arm search, not only `read` calls — the first pilot metric (read only) scored the chunks arm 0% because its search already shows text.
+- 2026-10-29 — Call budget is enforced by the server (`serve --max-calls`), not by the client — `claude -p` has no tool-call cap, and the server sees every call anyway.
