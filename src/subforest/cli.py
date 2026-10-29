@@ -1,4 +1,4 @@
-"""Command-line interface: `subforest build`, `subforest search` and `subforest serve`."""
+"""Command-line interface: build, search, serve, and the offline eval commands (data, bench, coverage)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from subforest.build import build_corpus
+from subforest.eval import FETCHERS, Dataset, bench, coverage, data_root
+from subforest.eval.datasets import http_download
 from subforest.induce import induce
 from subforest.policy import Policy
 from subforest.retrievers import FTS5Retriever
@@ -63,6 +65,51 @@ def _serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _dataset(args: argparse.Namespace) -> Dataset:
+    return Dataset(args.dataset, args.root or data_root())
+
+
+def _write_report(out: Path | None, name: str, text: str) -> None:
+    print(text, end="")
+    if out is not None:
+        out.mkdir(parents=True, exist_ok=True)
+        (out / name).write_text(text, encoding="utf-8")
+        print(f"wrote {out / name}", file=sys.stderr)
+
+
+def _data_fetch(args: argparse.Namespace) -> int:
+    dataset = _dataset(args)
+    FETCHERS[dataset.name](dataset, http_download)
+    print(f"{dataset.name}: {dataset.db} and {dataset.questions_path} ({len(dataset.questions())} questions)")
+    return 0
+
+
+def _needs_fetch(dataset: Dataset) -> bool:
+    if dataset.db.exists() and dataset.questions_path.exists():
+        return False
+    print(f"error: run `subforest data fetch {dataset.name}` first", file=sys.stderr)
+    return True
+
+
+def _bench(args: argparse.Namespace) -> int:
+    dataset = _dataset(args)
+    if _needs_fetch(dataset):
+        return 2
+    report = bench(dataset, queries=args.queries, k=args.k, budget=args.budget)
+    _write_report(args.out, f"{dataset.name}-bench.md", report.markdown())
+    return 0
+
+
+def _coverage(args: argparse.Namespace) -> int:
+    dataset = _dataset(args)
+    if _needs_fetch(dataset):
+        return 2
+    report = coverage(dataset, budgets=args.budgets, k=args.k, limit=args.limit, mode=args.mode)
+    suffix = "" if args.mode == "raw" else f"-{args.mode}"
+    _write_report(args.out, f"{dataset.name}-coverage{suffix}.md", report.markdown())
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return its exit code.
 
@@ -96,6 +143,35 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="a pause this long between calls starts a new policy turn",
     )
     serve.set_defaults(func=_serve)
+
+    datasets = sorted(FETCHERS)
+    data = sub.add_parser("data", help="download and build eval datasets (data never goes in the repo)")
+    data_sub = data.add_subparsers(dest="data_command", required=True)
+    fetch = data_sub.add_parser("fetch", help="download a dataset and build corpus.db + questions.jsonl")
+    fetch.add_argument("dataset", choices=datasets)
+    fetch.add_argument("--root", type=Path, help="data root (default: $SUBFOREST_DATA or ~/.cache/subforest)")
+    fetch.set_defaults(func=_data_fetch)
+
+    bench_p = sub.add_parser("bench", help="tier 1: build time, size, determinism and latency (no LLM)")
+    bench_p.add_argument("dataset", choices=datasets)
+    bench_p.add_argument("--root", type=Path)
+    bench_p.add_argument("--queries", type=int, default=200)
+    bench_p.add_argument("-k", type=int, default=50)
+    bench_p.add_argument("--budget", type=int, default=400)
+    bench_p.add_argument("--out", type=Path, help="directory to also write the Markdown report to")
+    bench_p.set_defaults(func=_bench)
+
+    cov = sub.add_parser(
+        "coverage", help="tier 2: gold evidence in the first view, chunks vs subforest (no LLM)"
+    )
+    cov.add_argument("dataset", choices=datasets)
+    cov.add_argument("--root", type=Path)
+    cov.add_argument("--budgets", type=int, nargs="+", default=[250, 500, 1000, 2000])
+    cov.add_argument("-k", type=int, default=50)
+    cov.add_argument("--limit", type=int)
+    cov.add_argument("--mode", choices=["raw", "titled"], default="raw")
+    cov.add_argument("--out", type=Path)
+    cov.set_defaults(func=_coverage)
     args = parser.parse_args(argv)
     code: int = args.func(args)
     return code
