@@ -9,6 +9,15 @@ from pathlib import Path
 
 from subforest.build import build_corpus
 from subforest.eval import FETCHERS, Dataset, bench, coverage, data_root
+from subforest.eval.agent import (
+    ARMS,
+    AgentConfig,
+    agent_report,
+    claude_command,
+    load_runs,
+    pending,
+    run_agent,
+)
 from subforest.eval.datasets import http_download
 from subforest.induce import induce
 from subforest.policy import Policy
@@ -61,7 +70,15 @@ def _serve(args: argparse.Namespace) -> int:
         print("error: the MCP server needs the extra: pip install 'subforest[mcp]'", file=sys.stderr)
         return 2
     policy = Policy.load(args.policy) if args.policy else None
-    serve(db, policy=policy, budget_tokens=args.budget, turn_idle_seconds=args.turn_idle_seconds)
+    serve(
+        db,
+        policy=policy,
+        budget_tokens=args.budget,
+        turn_idle_seconds=args.turn_idle_seconds,
+        view=args.view,
+        log=args.log,
+        max_calls=args.max_calls,
+    )
     return 0
 
 
@@ -110,6 +127,34 @@ def _coverage(args: argparse.Namespace) -> int:
     return 0
 
 
+def _agent_run(args: argparse.Namespace) -> int:
+    dataset = _dataset(args)
+    if _needs_fetch(dataset):
+        return 2
+    config = AgentConfig(model=args.model, max_calls=args.max_calls, budget_tokens=args.budget)
+    arms = ARMS if args.arm == "both" else (args.arm,)
+    if args.dry_run:
+        todo = pending(dataset.questions()[: args.limit], arms, load_runs(args.out / "runs.jsonl"))
+        todo = todo[: args.max_runs]
+        print(f"{len(todo)} runs pending in {args.out}; first command:")
+        if todo:
+            print(" ".join(claude_command(config, todo[0][1], Path("mcp.json"), todo[0][0].question)))
+        return 0
+    run_agent(dataset, args.out, config=config, arms=arms, limit=args.limit, max_runs=args.max_runs)
+    return 0
+
+
+def _agent_report(args: argparse.Namespace) -> int:
+    dataset = _dataset(args)
+    runs = load_runs(args.runs / "runs.jsonl")
+    report = agent_report(dataset, runs)
+    if not report.questions:
+        print("error: no question has finished in both arms yet", file=sys.stderr)
+        return 2
+    _write_report(args.out, f"{dataset.name}-agent.md", report.markdown())
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return its exit code.
 
@@ -142,6 +187,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=120.0,
         help="a pause this long between calls starts a new policy turn",
     )
+    serve.add_argument(
+        "--view", choices=["tree", "chunks"], default="tree", help="chunks: flat baseline for evals"
+    )
+    serve.add_argument("--log", type=Path, help="append one JSON line per tool call to this file")
+    serve.add_argument("--max-calls", type=int, help="answer at most this many tool calls, then refuse")
     serve.set_defaults(func=_serve)
 
     datasets = sorted(FETCHERS)
@@ -172,6 +222,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     cov.add_argument("--mode", choices=["raw", "titled"], default="raw")
     cov.add_argument("--out", type=Path)
     cov.set_defaults(func=_coverage)
+
+    agent = sub.add_parser("agent", help="tier 3: agent runs through claude -p, chunks vs subforest")
+    agent_sub = agent.add_subparsers(dest="agent_command", required=True)
+    run = agent_sub.add_parser("run", help="run pending questions; resumes from runs.jsonl")
+    run.add_argument("dataset", choices=datasets)
+    run.add_argument("--root", type=Path)
+    run.add_argument("--out", type=Path, required=True, help="directory holding runs.jsonl")
+    run.add_argument("--arm", choices=["both", *ARMS], default="both")
+    run.add_argument("--limit", type=int, help="only the first N questions")
+    run.add_argument("--max-runs", type=int, help="stop after N runs in this invocation")
+    run.add_argument("--model", default="haiku")
+    run.add_argument("--max-calls", type=int, default=10)
+    run.add_argument("--budget", type=int, default=800, help="token budget for search views, both arms")
+    run.add_argument("--dry-run", action="store_true", help="show what would run, call nothing")
+    run.set_defaults(func=_agent_run)
+    rep = agent_sub.add_parser("report", help="paired comparison of finished runs")
+    rep.add_argument("dataset", choices=datasets)
+    rep.add_argument("--root", type=Path)
+    rep.add_argument("--runs", type=Path, required=True, help="directory holding runs.jsonl")
+    rep.add_argument("--out", type=Path, help="directory to also write the Markdown report to")
+    rep.set_defaults(func=_agent_report)
     args = parser.parse_args(argv)
     code: int = args.func(args)
     return code

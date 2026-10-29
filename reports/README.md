@@ -29,3 +29,24 @@ Reading it:
 
 Files: [wixqa-coverage.md](wixqa-coverage.md), [qasper-coverage.md](qasper-coverage.md),
 [qasper-coverage-titled.md](qasper-coverage-titled.md).
+
+## Tier 3 — agent pilot, 50 WixQA questions (Haiku via `claude -p`, no spend)
+
+| Metric | chunks | subforest | Paired Δ (95% CI) |
+|---|---|---|---|
+| Saw gold-doc text | 84.0% | 72.0% | −12.0% (−24.0% to 0.0%), sign test p = 0.11 |
+| Gold doc shown by any call | 84.0% | 80.0% | −4.0% (−14.0% to +6.0%) |
+| Answer token F1 vs reference | 0.387 | 0.397 | +0.010 (−0.022 to +0.039) |
+| Tool calls / input tokens (mean) | 2.2 / 9.6k | 3.9 / 15.2k | |
+
+Reading it:
+
+- **No advantage for the sub-forest in this pilot.** Answer overlap is tied; the agent reached gold-doc text
+  slightly less often (not significant at n = 50) and spent ~1.7 more calls and ~60% more input tokens.
+- The tier 2 gain (gold doc visible more often) did not carry over: in several misses the gold doc was in the
+  outline but Haiku chose to read a sibling with a similar title. WixQA articles are short and the tree is shallow
+  (type → product → article), so there is little intra-document structure to navigate.
+- This does not contradict the paper (different model, retriever and answer-accuracy metric), but we make no
+  accuracy claim. Per the stop rule, any further render iteration must beat chunks beyond the CI.
+
+File: [wixqa-agent.md](wixqa-agent.md).

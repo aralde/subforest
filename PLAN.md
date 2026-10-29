@@ -79,21 +79,23 @@ Reference settings from the paper: ≤10 tool calls per question, ~50 nodes in t
 
 _Status: tiers 1–2 done, gate passed — see `reports/README.md`._
 
-### Tier 3 — Agent replication (paid, small)
-- [ ] Agent loop with two runners: `claude-code` (subscription, `claude -p` + MCP) and `api` (`subforest[eval]`)
-- [ ] Two arms, identical retriever, model and call budget: `chunks` vs `subforest`
-- [ ] Metrics: answer accuracy (LLM judge, prompt in repo), tokens in/out, tool calls, latency; JSONL per run,
-      resumable; cost estimate + confirmation; `--max-cost` hard stop
-- [ ] Pilot: ~30 questions via the `claude-code` runner (subscription) to debug the loop
-- [ ] Judge check: ~40 answers labelled by hand; agreement ≥ 85% or fix the judge prompt
-- [ ] Replication: all 200 WixQA expert-written questions, both arms, Claude Haiku 5.5 via API (~$5–10)
-- [ ] Later, only if needed: QASPER (effect ~3 points, needs many questions) and a Sonnet confirmation
+### Tier 3 — Agent replication (no spend: Claude subscription via `claude -p`)
+- [x] Runner over `claude -p` (Haiku, no built-in tools, only `subforest serve` as MCP), one process per run,
+      `runs.jsonl` resumable, stops cleanly at the subscription usage limit
+- [x] Two arms, identical retriever, model, call budget (10) and view budget (800 tokens): `chunks` vs `subforest`
+- [x] Metrics without an LLM judge: saw gold-doc text, gold doc shown, answer token F1, calls, tokens, latency;
+      paired sign test and bootstrap CI
+- [x] Pilot: 10 questions to debug the loop (fixed a metric that favoured subforest)
+- [ ] Pilot: 50 WixQA questions, both arms; report in `reports/`
+- [ ] If the pilot is promising: all 200 WixQA questions over several nights within subscription limits
+- [ ] Optional, still free: subscription-based judge (Haiku via `claude -p`) checked against ~40 hand labels
+- Dropped for now: API runner, paid judge, QASPER and Sonnet confirmation (owner chose zero spend)
 
 ### Tier 4 — Dogfooding (qualitative, the corporate argument)
 - [ ] Run the MCP server from Claude Code on a real docs corpus (ours or a prospect's) with 50–100 questions written
       by people who know it; note findings in `docs/decisions.md`
 
-**Accept:** WixQA replication report with both arms, paired significance and confidence intervals, judge validated.
+**Accept:** WixQA report with both arms, paired significance and confidence intervals.
 Stop rule: if subforest does not beat chunks beyond the CI after a couple of render iterations, do not publish an
 accuracy claim; document the result honestly.
 
