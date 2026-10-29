@@ -86,7 +86,8 @@ _Status: tiers 1–2 done, gate passed — see `reports/README.md`._
 - [x] Metrics without an LLM judge: saw gold-doc text, gold doc shown, answer token F1, calls, tokens, latency;
       paired sign test and bootstrap CI
 - [x] Pilot: 10 questions to debug the loop (fixed a metric that favoured subforest)
-- [ ] Pilot: 50 WixQA questions, both arms; report in `reports/`
+- [x] Pilot: 50 WixQA questions, both arms; report in `reports/` (no gain)
+- [x] Pilot: 50 QASPER questions, titled, one per paper (evidence seen +22 points, p = 0.013)
 - [ ] If the pilot is promising: all 200 WixQA questions over several nights within subscription limits
 - [ ] Optional, still free: subscription-based judge (Haiku via `claude -p`) checked against ~40 hand labels
 - Dropped for now: API runner, paid judge, QASPER and Sonnet confirmation (owner chose zero spend)

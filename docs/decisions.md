@@ -51,3 +51,4 @@ One line per decision: date — decision — reason.
 - 2026-10-29 — No LLM judge in tier 3; score "saw gold-doc text", "gold doc shown" and token F1 — WixQA gives gold docs per question, so retrieval success is measurable for free; answer accuracy stays the paper's claim, not ours.
 - 2026-10-29 — "Saw gold-doc text" counts chunks shown by a chunks-arm search, not only `read` calls — the first pilot metric (read only) scored the chunks arm 0% because its search already shows text.
 - 2026-10-29 — Call budget is enforced by the server (`serve --max-calls`), not by the client — `claude -p` has no tool-call cap, and the server sees every call anyway.
+- 2026-10-29 — QASPER agent pilot uses titled questions, one per paper, only with located evidence; evidence counts as seen when the first or last 80 characters of a gold paragraph appear in any tool output — raw QASPER questions are ambiguous across papers; head/tail probes survive chunk boundaries that split a paragraph.
