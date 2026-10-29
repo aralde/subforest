@@ -294,6 +294,24 @@ class TreeStore:
             counts.update({parent: n for parent, n in rows})
         return counts
 
+    def chunk(self, chunk_id: int) -> Chunk:
+        """Return one chunk by id; raises `KeyError` if it does not exist.
+
+        Example:
+            >>> TreeStore().chunk(1)
+            Traceback (most recent call last):
+            ...
+            KeyError: 'no chunk 1'
+        """
+        row = self._conn.execute(
+            'SELECT id, node_id, text, start, "end" FROM chunks WHERE id = ?', (chunk_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"no chunk {chunk_id}")
+        return Chunk(
+            id=row["id"], node_id=row["node_id"], text=row["text"], start=row["start"], end=row["end"]
+        )
+
     def chunks(self, node_id: int) -> list[Chunk]:
         """Return the chunks owned by a node, in text order.
 

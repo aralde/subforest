@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from subforest.induce import induce
-from subforest.models import Node
+from subforest.models import Hit, Node
 from subforest.policy import Policy, TurnState
 from subforest.retrievers import Retriever
 from subforest.store import TreeStore
@@ -21,6 +21,8 @@ from subforest.tokens import estimate_tokens
 
 _NODE_ID = re.compile(r"^n?(\d+)$")
 TOOL_NAMES = ("search", "expand", "read", "siblings", "outline")
+CHUNK_TOOL_NAMES = ("search", "read")
+View = Literal["tree", "chunks"]
 
 
 class ToolResult(BaseModel):
@@ -66,6 +68,7 @@ class Toolkit:
     """The agent-facing tools, sharing one store, retriever, render budget and per-turn policy state.
 
     `extra_tools` adds harness-provided tools (e.g. `semantic_search`) so the policy covers them too.
+    `view="chunks"` is the flat baseline used in evals: `search` lists hit chunks and only `read` remains.
 
     Example:
         >>> from subforest.build import DocSource, assemble
@@ -91,6 +94,7 @@ class Toolkit:
         more_k: int = 30,
         estimator: Callable[[str], int] | None = None,
         extra_tools: Mapping[str, Callable[..., ToolResult]] | None = None,
+        view: View = "tree",
     ) -> None:
         self.store = store
         self.retriever = retriever
@@ -99,14 +103,16 @@ class Toolkit:
         self.k = k
         self.more_k = more_k
         self.estimate = estimator or estimate_tokens
-        self._tools: dict[str, Callable[..., ToolResult]] = {
+        self.view = view
+        builtin: dict[str, Callable[..., ToolResult]] = {
             "search": self.search,
             "expand": self.expand,
             "read": self.read,
             "siblings": self.siblings,
             "outline": self.outline,
-            **(extra_tools or {}),
         }
+        names = TOOL_NAMES if view == "tree" else CHUNK_TOOL_NAMES
+        self._tools = {**{n: builtin[n] for n in names}, **(extra_tools or {})}
         self._hits: dict[int, int] = {}
 
     @property
@@ -192,7 +198,7 @@ class Toolkit:
             depth -= 1
 
     def search(self, query: str, more_results: bool = False) -> ToolResult:
-        """Search the corpus and return the induced sub-forest around the hits.
+        """Search the corpus and return the induced sub-forest around the hits (hit chunks in chunks view).
 
         `more_results=True` widens the search (more hits, double budget) to show weaker docs.
 
@@ -206,10 +212,12 @@ class Toolkit:
         k, budget = (self.more_k, self.budget_tokens * 2) if more_results else (self.k, self.budget_tokens)
         hits = self.retriever.search(query, k=k)
         if not hits:
+            hint = "outline a document you already know" if self.view == "tree" else "read a node you know"
             return ToolResult(
-                text="No results. Try other words, or outline a document you already know.",
-                data={"query": query, "hits": []},
+                text=f"No results. Try other words, or {hint}.", data={"query": query, "hits": []}
             )
+        if self.view == "chunks":
+            return self._chunk_results(query, hits, budget)
         forest = induce(self.store, hits)
         self._hits = {}
         for node_id, count in forest.hit_marks.items():
@@ -225,6 +233,20 @@ class Toolkit:
                 "nodes": [f"n{i}" for i in sorted(forest.nodes)],
             },
         )
+
+    def _chunk_results(self, query: str, hits: list[Hit], budget: int) -> ToolResult:
+        blocks: list[str] = []
+        shown: list[dict[str, Any]] = []
+        for hit in hits:
+            node = self.store.get_node(hit.node_id)
+            block = f"{node.title} [{node.short_id}]\n{self.store.chunk(hit.chunk_id).text}"
+            if blocks and self.estimate("\n\n".join([*blocks, block])) > budget:
+                break
+            blocks.append(block)
+            shown.append({**hit.model_dump(), "node": node.short_id})
+        if len(shown) < len(hits):
+            blocks.append(f"… {len(hits) - len(shown)} more chunks (call search with more_results=true)")
+        return ToolResult(text="\n\n".join(blocks), data={"query": query, "hits": shown})
 
     def expand(self, node_id: str | int, depth: int = 1) -> ToolResult:
         """Show a node's children (down to `depth` levels, reduced if over budget) with their ids.
