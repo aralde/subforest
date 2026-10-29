@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from subforest.eval.datasets import Dataset, Question, shown_node_ids
+from subforest.eval.datasets import Dataset, GoldSpan, Question, shown_node_ids
 from subforest.store import TreeStore
 from subforest.tools import ToolError, parse_node_id
 
@@ -55,6 +55,7 @@ class AgentConfig:
     budget_tokens: int = 800
     corpus: str = "the Wix help center"
     claude: str = "claude"
+    mode: Literal["raw", "titled"] = "raw"
     python: str = sys.executable
 
 
@@ -72,6 +73,43 @@ def token_f1(prediction: str, reference: str) -> float:
         return 0.0
     precision, recall = overlap / sum(pred.values()), overlap / sum(ref.values())
     return 2 * precision * recall / (precision + recall)
+
+
+def prompt_for(question: Question, mode: str) -> str:
+    """The text sent to the agent; `titled` names the source (e.g. the paper) when the dataset gives one.
+
+    Example:
+        >>> q = Question(id="q", question="Which corpus?", answer="", gold_docs=[1], context="Parsing")
+        >>> prompt_for(q, "titled")
+        'About "Parsing": Which corpus?'
+    """
+    if mode == "titled" and question.context:
+        return f'About "{question.context}": {question.question}'
+    return question.question
+
+
+def select_questions(
+    questions: Sequence[Question], *, evidence_only: bool, one_per_doc: bool
+) -> list[Question]:
+    """Keep questions with located evidence and/or the first question per gold document, in order.
+
+    Example:
+        >>> qs = [Question(id=str(i), question="?", answer="", gold_docs=[i // 2]) for i in range(4)]
+        >>> [q.id for q in select_questions(qs, evidence_only=False, one_per_doc=True)]
+        ['0', '2']
+    """
+    picked: list[Question] = []
+    docs: set[int] = set()
+    for q in questions:
+        if evidence_only and not q.gold_spans:
+            continue
+        if one_per_doc:
+            key = min(q.gold_docs, default=-1)
+            if key in docs:
+                continue
+            docs.add(key)
+        picked.append(q)
+    return picked
 
 
 def claude_command(config: AgentConfig, arm: Arm, mcp_config: Path, question: str) -> list[str]:
@@ -141,7 +179,7 @@ def run_one(
         cfg = work / "mcp.json"
         cfg.write_text(json.dumps(mcp_config(config, arm, db, log)), encoding="utf-8")
         start = time.monotonic()
-        stdout = invoke(claude_command(config, arm, cfg, question.question), work)
+        stdout = invoke(claude_command(config, arm, cfg, prompt_for(question, config.mode)), work)
         elapsed = time.monotonic() - start
         calls = (
             [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
@@ -160,6 +198,7 @@ def run_one(
         "id": question.id,
         "arm": arm,
         "model": config.model,
+        "mode": config.mode,
         "status": "error" if out.get("is_error") else "ok",
         "answer": answer,
         "seconds": round(elapsed, 2),
@@ -175,6 +214,7 @@ def run_one(
                 "tool": c["tool"],
                 "args": c["args"],
                 "shown": sorted(shown_node_ids(c["text"])),
+                "text": c["text"],
                 "error": c["error"],
                 "blocked": c["blocked"],
             }
@@ -217,6 +257,8 @@ def run_agent(
     arms: Sequence[Arm] = ARMS,
     limit: int | None = None,
     max_runs: int | None = None,
+    evidence_only: bool = False,
+    one_per_doc: bool = False,
     invoke: Invoke = run_claude,
     echo: Callable[[str], None] = print,
 ) -> int:
@@ -226,7 +268,8 @@ def run_agent(
     """
     out.mkdir(parents=True, exist_ok=True)
     runs_path = out / "runs.jsonl"
-    todo = pending(dataset.questions()[:limit], arms, load_runs(runs_path))[:max_runs]
+    questions = select_questions(dataset.questions(), evidence_only=evidence_only, one_per_doc=one_per_doc)
+    todo = pending(questions[:limit], arms, load_runs(runs_path))[:max_runs]
     for i, (question, arm) in enumerate(todo, 1):
         try:
             record = run_one(question, arm, dataset.db.resolve(), config, invoke)
@@ -271,6 +314,7 @@ def bootstrap_ci(diffs: Sequence[float], *, rounds: int = 5000, seed: int = 0) -
 class _ArmStats:
     gold_text: list[bool] = field(default_factory=list)
     gold_shown: list[bool] = field(default_factory=list)
+    evidence: list[bool] = field(default_factory=list)
     f1: list[float] = field(default_factory=list)
     calls: list[int] = field(default_factory=list)
     input_tokens: list[int] = field(default_factory=list)
@@ -298,6 +342,27 @@ def _read_id(call: dict[str, Any]) -> int | None:
         return None
 
 
+def _squash(text: str) -> str:
+    return " ".join(text.split())
+
+
+class _DocTexts:
+    def __init__(self, store: TreeStore) -> None:
+        self.store = store
+        self.cache: dict[int, str] = {}
+
+    def get(self, doc: int) -> str:
+        if doc not in self.cache:
+            self.cache[doc] = self.store.doc_text(doc) or ""
+        return self.cache[doc]
+
+
+def _probes(texts: _DocTexts, span: GoldSpan, size: int = 80) -> list[str]:
+    """Head and tail snippets of an evidence span; either counts, since chunks may split a paragraph."""
+    evidence = _squash(texts.get(span.doc)[span.start : span.end])
+    return [evidence[:size], evidence[-size:]] if evidence else []
+
+
 @dataclass
 class AgentReport:
     """Paired comparison of the two arms over questions that finished in both."""
@@ -306,26 +371,37 @@ class AgentReport:
     model: str
     questions: int
     arms: dict[Arm, _ArmStats]
+    mode: str = "raw"
 
     def markdown(self) -> str:
         """Render as a Markdown report."""
         a, b = self.arms["chunks"], self.arms["subforest"]
+        rate = [
+            ("Saw gold-doc text", a.gold_text, b.gold_text),
+            ("Gold doc shown", a.gold_shown, b.gold_shown),
+        ]
+        if a.evidence:
+            rate.append(("Saw gold evidence", a.evidence, b.evidence))
         lines = [
             f"# Agent runs — {self.dataset}",
             "",
-            f"{self.questions} questions answered in both arms by `{self.model}` through `claude -p`, "
-            "same retriever (BM25), call budget and view budget. No LLM judge.",
+            f"{self.questions} questions ({self.mode} mode) answered in both arms by `{self.model}` through "
+            "`claude -p`, same retriever (BM25), call budget and view budget. No LLM judge.",
             "",
             "- **Saw gold-doc text**: chunks: a gold-doc chunk was shown by search or a gold node was read; "
             "subforest: a gold node was read (outline lines alone do not count).",
             "- **Gold doc shown**: the gold doc's id appeared in any tool output.",
-            "",
-            "| Metric | chunks | subforest |",
-            "|---|---|---|",
-            f"| Saw gold-doc text | {statistics.fmean(a.gold_text):.1%} "
-            f"| {statistics.fmean(b.gold_text):.1%} |",
-            f"| Gold doc shown by any call | {statistics.fmean(a.gold_shown):.1%} "
-            f"| {statistics.fmean(b.gold_shown):.1%} |",
+        ]
+        if a.evidence:
+            lines.append(
+                "- **Saw gold evidence**: the start or end of a gold evidence paragraph appeared in any "
+                f"tool output ({len(a.evidence)} questions with located evidence)."
+            )
+        lines += ["", "| Metric | chunks | subforest |", "|---|---|---|"]
+        lines += [
+            f"| {name} | {statistics.fmean(xs):.1%} | {statistics.fmean(ys):.1%} |" for name, xs, ys in rate
+        ]
+        lines += [
             f"| Answer token F1 vs reference | {statistics.fmean(a.f1):.3f} | {statistics.fmean(b.f1):.3f} |",
             f"| Tool calls (mean) | {statistics.fmean(a.calls):.1f} | {statistics.fmean(b.calls):.1f} |",
             f"| Input tokens (mean) | {statistics.fmean(a.input_tokens):,.0f} "
@@ -337,10 +413,7 @@ class AgentReport:
             "| Metric | Δ | 95% CI | subforest only / chunks only | sign test p |",
             "|---|---|---|---|---|",
         ]
-        for name, xs, ys in (
-            ("Saw gold-doc text", a.gold_text, b.gold_text),
-            ("Gold doc shown", a.gold_shown, b.gold_shown),
-        ):
+        for name, xs, ys in rate:
             diffs = [float(y) - float(x) for x, y in zip(xs, ys, strict=True)]
             wins = sum(y and not x for x, y in zip(xs, ys, strict=True))
             losses = sum(x and not y for x, y in zip(xs, ys, strict=True))
@@ -363,6 +436,7 @@ def agent_report(dataset: Dataset, runs: Sequence[dict[str, Any]]) -> AgentRepor
     models = {r["model"] for r in by_key.values()}
     cache: dict[int, int | None] = {}
     with TreeStore(dataset.db) as store:
+        texts = _DocTexts(store)
         for q in questions:
             gold = set(q.gold_docs)
             for arm in ARMS:
@@ -379,8 +453,20 @@ def agent_report(dataset: Dataset, runs: Sequence[dict[str, Any]]) -> AgentRepor
                 text_seen = read | (shown if arm == "chunks" else set())
                 stats.gold_text.append(bool(text_seen & gold))
                 stats.gold_shown.append(bool((shown | read) & gold))
+                if q.gold_spans:
+                    outputs = _squash(" ".join(c.get("text", "") for c in run["calls"]))
+                    stats.evidence.append(
+                        any(any(p in outputs for p in _probes(texts, s)) for s in q.gold_spans)
+                    )
                 stats.f1.append(token_f1(run["answer"], q.answer))
                 stats.calls.append(len(run["calls"]))
                 stats.input_tokens.append(run["input_tokens"])
                 stats.seconds.append(run["seconds"])
-    return AgentReport(dataset.name, ", ".join(sorted(models)) or "n/a", len(questions), arms)
+    modes = {r.get("mode", "raw") for r in by_key.values()}
+    return AgentReport(
+        dataset.name,
+        ", ".join(sorted(models)) or "n/a",
+        len(questions),
+        arms,
+        ", ".join(sorted(modes)) or "raw",
+    )
