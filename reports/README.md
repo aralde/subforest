@@ -30,7 +30,37 @@ Reading it:
 Files: [wixqa-coverage.md](wixqa-coverage.md), [qasper-coverage.md](qasper-coverage.md),
 [qasper-coverage-titled.md](qasper-coverage-titled.md).
 
-## Tier 3 — agent pilot, 50 WixQA questions (Haiku via `claude -p`, no spend)
+## Tier 3 — agent runs, full (Haiku via `claude -p`, Sonnet judge, no API spend)
+
+Same retriever (BM25), model, call budget (10) and view budget (800 tokens) in both arms; the only change is
+what `search` shows. WixQA: all 200 expert-written questions. QASPER: 400 papers, one question each with
+located evidence, paper title named in the question. Answers judged by Sonnet via `claude -p`, blind to the
+arm; the judge agreed with 97.5% of 40 blind labels (labelled by Claude Opus in-session, not by a human).
+
+| Dataset | Judged correct: chunks → subforest | Paired Δ (95% CI) | Sign test p | Saw gold evidence / doc text |
+|---|---|---|---|---|
+| WixQA (200) | 58.0% → 58.5% | +0.5% (−6.0% to +7.5%) | 1.00 | doc text 79.0% → 76.0% |
+| QASPER, titled (400) | 57.5% → **61.3%** | **+3.8% (−0.5% to +8.0%)** | 0.12 | evidence 80.0% → **85.8%** (p = 0.013) |
+
+Cost per question (mean): WixQA 2.4 → 4.3 tool calls, 10.3k → 18.0k input tokens; QASPER 2.9 → 4.2 calls,
+15.9k → 19.3k tokens. Median latency +1 s.
+
+Reading it:
+
+- **Short, flat articles (WixQA): no effect.** Answers are tied and the CI rules out gains above ~7.5 points,
+  so the paper's upper WixQA range (+10.5) does not reproduce in our setting.
+- **Long, sectioned papers (QASPER): the sub-forest helps the agent find the evidence** (+5.8 points,
+  significant) and answers **+3.8 points** more questions correctly. That matches the paper's QASPER range
+  (+2.4 to +3.5) but is not significant at n = 400 (p = 0.12; the CI touches −0.5).
+- The extra calls are the price: ~1.5–2 more tool calls and 20–75% more input tokens per question.
+- Our claim: structure helps locating evidence in long structured documents; answer gains are consistent
+  with the paper on QASPER but not established by our runs.
+
+Files: [wixqa-agent.md](wixqa-agent.md), [qasper-agent.md](qasper-agent.md).
+
+### Pilot — agent pilot, 50 WixQA questions (Haiku via `claude -p`, no spend)
+
+_Pilot on the first 50 questions, kept for the record; superseded by the full runs above._
 
 | Metric | chunks | subforest | Paired Δ (95% CI) |
 |---|---|---|---|
@@ -49,9 +79,10 @@ Reading it:
 - This does not contradict the paper (different model, retriever and answer-accuracy metric), but we make no
   accuracy claim. Per the stop rule, any further render iteration must beat chunks beyond the CI.
 
-File: [wixqa-agent.md](wixqa-agent.md).
 
-## Tier 3 — agent pilot, 50 QASPER questions (titled, Haiku via `claude -p`, no spend)
+### Pilot — agent pilot, 50 QASPER questions (titled, Haiku via `claude -p`, no spend)
+
+_Pilot on the first 50 questions, kept for the record; superseded by the full runs above._
 
 One question per paper, only questions with located evidence, the paper title named in the question.
 
@@ -72,9 +103,10 @@ Reading it:
   spans. Whether finding the evidence improves answers needs a judge, which we have not run.
 - Contrast with WixQA (short, flat articles): no gain there. Structure pays off where there is structure.
 
-File: [qasper-agent.md](qasper-agent.md).
 
-## Tier 3 — judged answers (Sonnet judge via `claude -p`, blind to the arm)
+### Pilot — judged answers (Sonnet judge via `claude -p`, blind to the arm)
+
+_Pilot on the first 50 questions, kept for the record; superseded by the full runs above._
 
 The judge was checked on 40 QASPER answers sampled with a fixed seed and labelled blind in-session by Claude
 Opus (a model, not a human): Sonnet agreed on 97.5% (correct vs not), Haiku only on 77.5%, so Sonnet judges.

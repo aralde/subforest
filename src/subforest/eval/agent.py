@@ -399,7 +399,8 @@ class AgentReport:
             f"# Agent runs — {self.dataset}",
             "",
             f"{self.questions} questions ({self.mode} mode) answered in both arms by `{self.model}` through "
-            "`claude -p`, same retriever (BM25), call budget and view budget. No LLM judge.",
+            "`claude -p`, same retriever (BM25), call budget and view budget."
+            + ("" if a.correct else " No LLM judge."),
             "",
             "- **Saw gold-doc text**: chunks: a gold-doc chunk was shown by search or a gold node was read; "
             "subforest: a gold node was read (outline lines alone do not count).",
