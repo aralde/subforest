@@ -156,3 +156,31 @@ def test_titled_qasper_run_scores_evidence(qasper: Dataset, tmp_path: Path) -> N
     report = agent_report(qasper, runs)
     assert len(report.arms["chunks"].evidence) == 1 and report.arms["chunks"].evidence[0]
     assert "| Saw gold evidence |" in report.markdown() and "(titled mode)" in report.markdown()
+
+
+def test_judge_is_blind_resumes_and_feeds_the_report(wixqa: Dataset, tmp_path: Path) -> None:  # noqa: F811
+    from subforest.eval.judge import judge_runs, load_judgments
+
+    out = tmp_path / "runs"
+    run_agent(
+        wixqa, out, config=AgentConfig(), invoke=fake_claude({"tree": "Up to 3 days."}), echo=lambda _: None
+    )
+    prompts: list[str] = []
+
+    def judge(cmd: list[str], cwd: Path) -> str:
+        prompts.append(cmd[2])
+        verdict = "correct" if cmd[2].endswith("Candidate answer: Up to 3 days.") else "incorrect"
+        return json.dumps({"is_error": False, "result": f'{{"verdict": "{verdict}", "reason": "r"}}'})
+
+    assert judge_runs(wixqa, out, invoke=judge, echo=lambda _: None) == 4
+    assert all("chunks" not in p and "subforest" not in p for p in prompts)
+    assert judge_runs(wixqa, out, invoke=judge, echo=lambda _: None) == 0
+    judgments = load_judgments(out / "judgments.jsonl")
+    labels = {k: "correct" for k in judgments}
+    report = agent_report(wixqa, load_runs(out / "runs.jsonl"), judgments, labels)
+    assert report.arms["subforest"].correct == [True, True] and report.arms["chunks"].correct == [
+        False,
+        False,
+    ]
+    text = report.markdown()
+    assert "| Judged correct |" in text and "4 labelled answers" in text

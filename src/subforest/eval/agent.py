@@ -18,7 +18,7 @@ import sys
 import tempfile
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -316,6 +316,8 @@ class _ArmStats:
     gold_shown: list[bool] = field(default_factory=list)
     evidence: list[bool] = field(default_factory=list)
     f1: list[float] = field(default_factory=list)
+    correct: list[bool] = field(default_factory=list)
+    lenient: list[bool] = field(default_factory=list)
     calls: list[int] = field(default_factory=list)
     input_tokens: list[int] = field(default_factory=list)
     seconds: list[float] = field(default_factory=list)
@@ -372,6 +374,8 @@ class AgentReport:
     questions: int
     arms: dict[Arm, _ArmStats]
     mode: str = "raw"
+    judge: str = ""
+    agreement: str = ""
 
     def markdown(self) -> str:
         """Render as a Markdown report."""
@@ -382,6 +386,9 @@ class AgentReport:
         ]
         if a.evidence:
             rate.append(("Saw gold evidence", a.evidence, b.evidence))
+        if a.correct:
+            rate.append(("Judged correct", a.correct, b.correct))
+            rate.append(("Judged correct or partial", a.lenient, b.lenient))
         lines = [
             f"# Agent runs — {self.dataset}",
             "",
@@ -397,6 +404,13 @@ class AgentReport:
                 "- **Saw gold evidence**: the start or end of a gold evidence paragraph appeared in any "
                 f"tool output ({len(a.evidence)} questions with located evidence)."
             )
+        if a.correct:
+            lines.append(
+                f"- **Judged correct**: verdict of `{self.judge}` via `claude -p`, blind to the arm, "
+                f"against the reference answer ({len(a.correct)} questions judged in both arms)."
+            )
+        if self.agreement:
+            lines.append(f"- **Judge check**: {self.agreement}")
         lines += ["", "| Metric | chunks | subforest |", "|---|---|---|"]
         lines += [
             f"| {name} | {statistics.fmean(xs):.1%} | {statistics.fmean(ys):.1%} |" for name, xs, ys in rate
@@ -428,8 +442,40 @@ class AgentReport:
         return "\n".join(lines) + "\n"
 
 
-def agent_report(dataset: Dataset, runs: Sequence[dict[str, Any]]) -> AgentReport:
-    """Score `runs` against the dataset's gold docs and answers, keeping questions finished in both arms."""
+def judge_agreement(
+    judgments: Mapping[tuple[str, str], dict[str, Any]], labels: Mapping[tuple[str, str], str]
+) -> str:
+    """One line comparing judge verdicts with reference labels on the items both cover.
+
+    Example:
+        >>> judge_agreement({("q", "chunks"): {"verdict": "partial"}}, {("q", "chunks"): "incorrect"})
+        '1 labelled answers: exact agreement 0.0%, correct-vs-not agreement 100.0%.'
+    """
+    keys = [k for k in labels if k in judgments and judgments[k]["verdict"] is not None]
+    if not keys:
+        return ""
+    exact = statistics.fmean(judgments[k]["verdict"] == labels[k] for k in keys)
+    binary = statistics.fmean(
+        (judgments[k]["verdict"] == "correct") == (labels[k] == "correct") for k in keys
+    )
+    return (
+        f"{len(keys)} labelled answers: exact agreement {exact:.1%}, correct-vs-not agreement {binary:.1%}."
+    )
+
+
+def agent_report(
+    dataset: Dataset,
+    runs: Sequence[dict[str, Any]],
+    judgments: Mapping[tuple[str, str], dict[str, Any]] | None = None,
+    labels: Mapping[tuple[str, str], str] | None = None,
+) -> AgentReport:
+    """Score `runs` against the dataset's gold docs and answers, keeping questions finished in both arms.
+
+    With `judgments`, questions judged in both arms also get judged-correct rates; with `labels`, the report
+    states how often the judge agrees with them.
+    """
+    judgments = judgments or {}
+    judged = {k for k, v in judgments.items() if v["verdict"] is not None}
     by_key = {(r["id"], r["arm"]): r for r in runs if r["status"] == "ok"}
     questions = [q for q in dataset.questions() if all((q.id, arm) in by_key for arm in ARMS)]
     arms = {arm: _ArmStats() for arm in ARMS}
@@ -459,6 +505,10 @@ def agent_report(dataset: Dataset, runs: Sequence[dict[str, Any]]) -> AgentRepor
                         any(any(p in outputs for p in _probes(texts, s)) for s in q.gold_spans)
                     )
                 stats.f1.append(token_f1(run["answer"], q.answer))
+                if all((q.id, x) in judged for x in ARMS):
+                    verdict = judgments[(q.id, arm)]["verdict"]
+                    stats.correct.append(verdict == "correct")
+                    stats.lenient.append(verdict in ("correct", "partial"))
                 stats.calls.append(len(run["calls"]))
                 stats.input_tokens.append(run["input_tokens"])
                 stats.seconds.append(run["seconds"])
@@ -469,4 +519,6 @@ def agent_report(dataset: Dataset, runs: Sequence[dict[str, Any]]) -> AgentRepor
         len(questions),
         arms,
         ", ".join(sorted(modes)) or "raw",
+        judge=", ".join(sorted({v["judge"] for v in judgments.values()})),
+        agreement=judge_agreement(judgments, labels or {}),
     )

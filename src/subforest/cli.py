@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -21,6 +22,7 @@ from subforest.eval.agent import (
     select_questions,
 )
 from subforest.eval.datasets import http_download
+from subforest.eval.judge import judge_runs, load_judgments
 from subforest.induce import induce
 from subforest.policy import Policy
 from subforest.retrievers import FTS5Retriever
@@ -159,10 +161,25 @@ def _agent_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _agent_judge(args: argparse.Namespace) -> int:
+    dataset = _dataset(args)
+    if _needs_fetch(dataset):
+        return 2
+    judge_runs(dataset, args.runs, model=args.model, max_runs=args.max_runs)
+    return 0
+
+
 def _agent_report(args: argparse.Namespace) -> int:
     dataset = _dataset(args)
     runs = load_runs(args.runs / "runs.jsonl")
-    report = agent_report(dataset, runs)
+    labels_path = args.labels or args.runs / "labels.jsonl"
+    labels = {}
+    if labels_path.exists():
+        for line in labels_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                row = json.loads(line)
+                labels[(row["id"], row["arm"])] = row["verdict"]
+    report = agent_report(dataset, runs, load_judgments(args.runs / "judgments.jsonl"), labels)
     if not report.questions:
         print("error: no question has finished in both arms yet", file=sys.stderr)
         return 2
@@ -260,8 +277,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     rep.add_argument("dataset", choices=datasets)
     rep.add_argument("--root", type=Path)
     rep.add_argument("--runs", type=Path, required=True, help="directory holding runs.jsonl")
+    rep.add_argument(
+        "--labels", type=Path, help="reference verdicts (default: <runs>/labels.jsonl if present)"
+    )
     rep.add_argument("--out", type=Path, help="directory to also write the Markdown report to")
     rep.set_defaults(func=_agent_report)
+    judge = agent_sub.add_parser("judge", help="grade finished answers with claude -p, blind to the arm")
+    judge.add_argument("dataset", choices=datasets)
+    judge.add_argument("--root", type=Path)
+    judge.add_argument("--runs", type=Path, required=True, help="directory holding runs.jsonl")
+    judge.add_argument("--model", default="haiku")
+    judge.add_argument("--max-runs", type=int, help="stop after N verdicts in this invocation")
+    judge.set_defaults(func=_agent_judge)
     args = parser.parse_args(argv)
     code: int = args.func(args)
     return code
