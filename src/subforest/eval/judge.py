@@ -27,7 +27,11 @@ who read the document, and a candidate answer. Decide whether the candidate answ
   does not contradict it.
 - partial: it gets part of the key facts right but misses or garbles an important part.
 - incorrect: it is wrong, contradicts the reference, misses the key facts, or says the documents do not
-  cover the question.
+  cover a question that the reference does answer.
+
+The reference may be terse (a list of names, a number, "Yes" or "No"). For a yes/no reference, the candidate
+must reach the same yes or no. If the reference says "Unanswerable", the candidate is correct when it says the
+documents do not answer the question, and incorrect when it gives a confident answer.
 
 Reply with one JSON object and nothing else: {"verdict": "correct" | "partial" | "incorrect", "reason": "<one
 short sentence>"}"""
