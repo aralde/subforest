@@ -117,7 +117,7 @@ def judge_runs(
     dataset: Dataset,
     runs_dir: Path,
     *,
-    model: str = "haiku",
+    model: str = "sonnet",
     max_runs: int | None = None,
     invoke: Invoke = run_claude,
     echo: Callable[[str], None] = print,

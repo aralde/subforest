@@ -286,7 +286,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     judge.add_argument("dataset", choices=datasets)
     judge.add_argument("--root", type=Path)
     judge.add_argument("--runs", type=Path, required=True, help="directory holding runs.jsonl")
-    judge.add_argument("--model", default="haiku")
+    judge.add_argument("--model", default="sonnet", help="judge model (sonnet passed the label check)")
     judge.add_argument("--max-runs", type=int, help="stop after N verdicts in this invocation")
     judge.set_defaults(func=_agent_judge)
     args = parser.parse_args(argv)
