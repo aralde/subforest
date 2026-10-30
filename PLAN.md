@@ -89,7 +89,8 @@ _Status: tiers 1–2 done, gate passed — see `reports/README.md`._
 - [x] Pilot: 50 WixQA questions, both arms; report in `reports/` (no gain)
 - [x] Pilot: 50 QASPER questions, titled, one per paper (evidence seen +22 points, p = 0.013)
 - [ ] If the pilot is promising: all 200 WixQA questions over several nights within subscription limits
-- [ ] Optional, still free: subscription-based judge (Haiku via `claude -p`) checked against ~40 hand labels
+- [x] Subscription judge, blind to the arm, checked on 40 labelled answers (Sonnet 97.5%, Haiku 77.5%):
+      answers tied in both pilots (WixQA 72 vs 70%, QASPER 52 vs 52%)
 - Dropped for now: API runner, paid judge, QASPER and Sonnet confirmation (owner chose zero spend)
 
 ### Tier 4 — Dogfooding (qualitative, the corporate argument)

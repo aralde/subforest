@@ -73,3 +73,22 @@ Reading it:
 - Contrast with WixQA (short, flat articles): no gain there. Structure pays off where there is structure.
 
 File: [qasper-agent.md](qasper-agent.md).
+
+## Tier 3 — judged answers (Sonnet judge via `claude -p`, blind to the arm)
+
+The judge was checked on 40 QASPER answers sampled with a fixed seed and labelled blind in-session by Claude
+Opus (a model, not a human): Sonnet agreed on 97.5% (correct vs not), Haiku only on 77.5%, so Sonnet judges.
+
+| Dataset (50 questions) | Judged correct: chunks → subforest | Paired Δ (95% CI) | Correct or partial |
+|---|---|---|---|
+| WixQA | 72.0% → 70.0% | −2.0% (−14.0% to +10.0%) | 92.0% → 92.0% |
+| QASPER, titled | 52.0% → 52.0% | +0.0% (−12.0% to +12.0%) | 66.0% → 68.0% |
+
+Reading it:
+
+- **Answer accuracy is tied in both datasets.** On QASPER the sub-forest found the gold evidence 22 points more
+  often, but Haiku turned that into the same number of correct answers.
+- At n = 50 the CI is ±12 points, so we can rule out large effects, not the paper's +2.4 to +10.5 points.
+  Detecting those would take several hundred questions per dataset.
+- Our claim stays at what we measured: the sub-forest helps the agent **locate evidence** in long, sectioned
+  documents, at ~1.5 more tool calls. We make no answer-accuracy claim.
