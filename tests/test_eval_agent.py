@@ -10,7 +10,7 @@ from test_eval_offline import qasper, wixqa  # noqa: F401
 from subforest import TreeStore
 from subforest.cli import main
 from subforest.eval import Dataset
-from subforest.eval.agent import AgentConfig, agent_report, load_runs, run_agent, sign_test
+from subforest.eval.agent import AgentConfig, UsageLimitReached, agent_report, load_runs, run_agent, sign_test
 from subforest.mcp import create_server
 from subforest.retrievers import FTS5Retriever
 from subforest.tools import Toolkit
@@ -88,9 +88,9 @@ def test_usage_limit_stops_without_recording(wixqa: Dataset, tmp_path: Path) -> 
     out = tmp_path / "runs"
     messages: list[str] = []
     invoke = fake_claude({}, limit_after=1)
-    assert run_agent(wixqa, out, config=AgentConfig(), invoke=invoke, echo=messages.append) == 1
+    with pytest.raises(UsageLimitReached, match="usage limit reached after 1 runs"):
+        run_agent(wixqa, out, config=AgentConfig(), invoke=invoke, echo=messages.append)
     assert len(load_runs(out / "runs.jsonl")) == 1
-    assert "usage limit reached after 1 runs" in messages[-1]
 
 
 def test_cli_dry_run_and_report(wixqa: Dataset, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:  # noqa: F811
@@ -184,3 +184,13 @@ def test_judge_is_blind_resumes_and_feeds_the_report(wixqa: Dataset, tmp_path: P
     ]
     text = report.markdown()
     assert "| Judged correct |" in text and "4 labelled answers" in text
+
+
+def test_repeated_errors_stop_the_run(wixqa: Dataset, tmp_path: Path) -> None:  # noqa: F811
+    from subforest.eval.agent import run_agent as run
+
+    def broken(cmd: list[str], cwd: Path) -> str:
+        return json.dumps({"is_error": True, "result": "something unexpected"})
+
+    with pytest.raises(UsageLimitReached, match="3 errors in a row"):
+        run(wixqa, tmp_path, config=AgentConfig(), invoke=broken, echo=lambda _: None)

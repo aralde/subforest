@@ -13,7 +13,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
-from subforest.eval.agent import Invoke, load_runs, run_claude
+from subforest.eval.agent import MAX_ERRORS_IN_A_ROW, Invoke, UsageLimitReached, load_runs, run_claude
 from subforest.eval.datasets import Dataset
 
 Verdict = Literal["correct", "partial", "incorrect"]
@@ -124,7 +124,7 @@ def judge_runs(
 ) -> int:
     """Judge every finished run without a verdict; returns how many were judged.
 
-    Stops early, without error, when the subscription's usage limit is reached.
+    Raises `UsageLimitReached` when the subscription's usage window is spent; earlier verdicts are saved.
     """
     questions = {q.id: q for q in dataset.questions()}
     path = runs_dir / "judgments.jsonl"
@@ -134,6 +134,7 @@ def judge_runs(
         for r in load_runs(runs_dir / "runs.jsonl")
         if r["status"] == "ok" and (r["id"], r["arm"]) not in done and r["id"] in questions
     ][:max_runs]
+    failures = 0
     for i, run in enumerate(todo, 1):
         q = questions[run["id"]]
         stdout = invoke(judge_command(model, judge_input(q.question, q.answer, run["answer"])), runs_dir)
@@ -143,11 +144,13 @@ def judge_runs(
             out = {"is_error": True, "result": stdout[-2000:]}
         reply = str(out.get("result") or "")
         if out.get("is_error") and _LIMIT.search(reply):
-            echo(f"usage limit reached after {i - 1} verdicts; rerun later to resume")
-            return i - 1
+            raise UsageLimitReached(f"usage limit reached after {i - 1} verdicts; rerun later to resume")
         verdict, reason = parse_verdict(reply) if not out.get("is_error") else (None, reply[:200])
         record = {"id": run["id"], "arm": run["arm"], "judge": model, "verdict": verdict, "reason": reason}
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
         echo(f"[{i}/{len(todo)}] {run['id']} {run['arm']}: {verdict}")
+        failures = failures + 1 if verdict is None else 0
+        if failures >= MAX_ERRORS_IN_A_ROW:
+            raise UsageLimitReached(f"{failures} unusable verdicts in a row, last: {reason[:200]!r}")
     return len(todo)
