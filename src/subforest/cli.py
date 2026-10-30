@@ -13,6 +13,7 @@ from subforest.eval import FETCHERS, Dataset, bench, coverage, data_root
 from subforest.eval.agent import (
     ARMS,
     AgentConfig,
+    UsageLimitReached,
     agent_report,
     claude_command,
     load_runs,
@@ -28,6 +29,7 @@ from subforest.policy import Policy
 from subforest.retrievers import FTS5Retriever
 from subforest.store import TreeStore
 
+LIMIT_EXIT = 75
 CORPUS_NAMES = {"wixqa": "the Wix help center", "qasper": "a collection of NLP research papers"}
 
 
@@ -155,9 +157,13 @@ def _agent_run(args: argparse.Namespace) -> int:
             prompt = prompt_for(todo[0][0], config.mode)
             print(" ".join(claude_command(config, todo[0][1], Path("mcp.json"), prompt)))
         return 0
-    run_agent(
-        dataset, args.out, config=config, arms=arms, limit=args.limit, max_runs=args.max_runs, **selection
-    )
+    try:
+        run_agent(
+            dataset, args.out, config=config, arms=arms, limit=args.limit, max_runs=args.max_runs, **selection
+        )
+    except UsageLimitReached as exc:
+        print(exc, file=sys.stderr)
+        return LIMIT_EXIT
     return 0
 
 
@@ -165,7 +171,11 @@ def _agent_judge(args: argparse.Namespace) -> int:
     dataset = _dataset(args)
     if _needs_fetch(dataset):
         return 2
-    judge_runs(dataset, args.runs, model=args.model, max_runs=args.max_runs)
+    try:
+        judge_runs(dataset, args.runs, model=args.model, max_runs=args.max_runs)
+    except UsageLimitReached as exc:
+        print(exc, file=sys.stderr)
+        return LIMIT_EXIT
     return 0
 
 

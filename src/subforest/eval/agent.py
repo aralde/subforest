@@ -44,6 +44,7 @@ _STOP = frozenset(
 )
 
 Invoke = Callable[[list[str], Path], str]
+MAX_ERRORS_IN_A_ROW = 3
 
 
 @dataclass
@@ -166,7 +167,7 @@ def run_claude(cmd: list[str], cwd: Path) -> str:  # pragma: no cover - needs th
 
 
 class UsageLimitReached(Exception):
-    """The subscription's usage window is spent; rerun later and the runner resumes."""
+    """The subscription's usage window is spent (or runs keep failing); rerun later and the runner resumes."""
 
 
 def run_one(
@@ -264,21 +265,26 @@ def run_agent(
 ) -> int:
     """Run pending (question, arm) pairs, appending to `out/runs.jsonl`; returns how many ran.
 
-    Stops early, without error, when the subscription's usage limit is reached.
+    Raises `UsageLimitReached` when the subscription's usage window is spent; finished runs are already saved.
     """
     out.mkdir(parents=True, exist_ok=True)
     runs_path = out / "runs.jsonl"
     questions = select_questions(dataset.questions(), evidence_only=evidence_only, one_per_doc=one_per_doc)
     todo = pending(questions[:limit], arms, load_runs(runs_path))[:max_runs]
+    errors = 0
     for i, (question, arm) in enumerate(todo, 1):
         try:
             record = run_one(question, arm, dataset.db.resolve(), config, invoke)
         except UsageLimitReached as exc:
-            echo(f"usage limit reached after {i - 1} runs; rerun later to resume ({exc})")
-            return i - 1
+            raise UsageLimitReached(
+                f"usage limit reached after {i - 1} runs; rerun later to resume ({exc})"
+            ) from None
         with runs_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
         echo(f"[{i}/{len(todo)}] {question.id} {arm}: {record['status']}, {len(record['calls'])} calls")
+        errors = errors + 1 if record["status"] == "error" else 0
+        if errors >= MAX_ERRORS_IN_A_ROW:
+            raise UsageLimitReached(f"{errors} errors in a row, last: {record['answer'][:200]!r}")
     return len(todo)
 
 
@@ -393,7 +399,8 @@ class AgentReport:
             f"# Agent runs — {self.dataset}",
             "",
             f"{self.questions} questions ({self.mode} mode) answered in both arms by `{self.model}` through "
-            "`claude -p`, same retriever (BM25), call budget and view budget. No LLM judge.",
+            "`claude -p`, same retriever (BM25), call budget and view budget."
+            + ("" if a.correct else " No LLM judge."),
             "",
             "- **Saw gold-doc text**: chunks: a gold-doc chunk was shown by search or a gold node was read; "
             "subforest: a gold node was read (outline lines alone do not count).",
