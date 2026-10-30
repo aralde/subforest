@@ -50,3 +50,26 @@ Reading it:
   accuracy claim. Per the stop rule, any further render iteration must beat chunks beyond the CI.
 
 File: [wixqa-agent.md](wixqa-agent.md).
+
+## Tier 3 — agent pilot, 50 QASPER questions (titled, Haiku via `claude -p`, no spend)
+
+One question per paper, only questions with located evidence, the paper title named in the question.
+
+| Metric | chunks | subforest | Paired Δ (95% CI) |
+|---|---|---|---|
+| Saw gold evidence | 68.0% | **90.0%** | **+22.0% (+6.0% to +36.0%)**, 14 / 3 discordant, sign test p = 0.013 |
+| Saw gold-doc text | 100.0% | 100.0% | — |
+| Answer token F1 vs reference | 0.089 | 0.089 | +0.000 (−0.017 to +0.019) |
+| Tool calls / input tokens (mean) | 2.6 / 13.9k | 4.1 / 18.5k | |
+
+Reading it:
+
+- **Where documents are long and sectioned, the sub-forest helps the agent find the evidence**: it reached the
+  gold evidence paragraph 22 points more often, significant even at n = 50. This matches the tier 2 result and
+  the direction of the paper's QASPER ablation.
+- It costs ~1.5 more calls and ~33% more input tokens; part of the gain may come from reading more text.
+- Token F1 is uninformative here (both 0.089): Haiku writes full sentences while QASPER references are short
+  spans. Whether finding the evidence improves answers needs a judge, which we have not run.
+- Contrast with WixQA (short, flat articles): no gain there. Structure pays off where there is structure.
+
+File: [qasper-agent.md](qasper-agent.md).

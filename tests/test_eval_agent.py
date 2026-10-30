@@ -5,7 +5,7 @@ from typing import Any
 import anyio
 import pytest
 from mcp import Client
-from test_eval_offline import wixqa  # noqa: F401
+from test_eval_offline import qasper, wixqa  # noqa: F401
 
 from subforest import TreeStore
 from subforest.cli import main
@@ -140,3 +140,19 @@ def test_server_logs_calls_caps_them_and_serves_chunks_view(corpus_dir: Path, tm
 
 def test_sign_test_symmetry() -> None:
     assert sign_test(3, 12) == sign_test(12, 3)
+
+
+def test_titled_qasper_run_scores_evidence(qasper: Dataset, tmp_path: Path) -> None:  # noqa: F811
+    out = tmp_path / "runs"
+    invoke = fake_claude({})
+    config = AgentConfig(mode="titled", corpus="papers")
+    ran = run_agent(
+        qasper, out, config=config, invoke=invoke, evidence_only=True, one_per_doc=True, echo=print
+    )
+    assert ran == 2
+    assert invoke.seen[0][2].startswith('About "Parsing Learner English": ')
+    runs = load_runs(out / "runs.jsonl")
+    assert all(r["mode"] == "titled" and r["calls"][0]["text"] for r in runs)
+    report = agent_report(qasper, runs)
+    assert len(report.arms["chunks"].evidence) == 1 and report.arms["chunks"].evidence[0]
+    assert "| Saw gold evidence |" in report.markdown() and "(titled mode)" in report.markdown()

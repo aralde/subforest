@@ -16,13 +16,17 @@ from subforest.eval.agent import (
     claude_command,
     load_runs,
     pending,
+    prompt_for,
     run_agent,
+    select_questions,
 )
 from subforest.eval.datasets import http_download
 from subforest.induce import induce
 from subforest.policy import Policy
 from subforest.retrievers import FTS5Retriever
 from subforest.store import TreeStore
+
+CORPUS_NAMES = {"wixqa": "the Wix help center", "qasper": "a collection of NLP research papers"}
 
 
 def _build(args: argparse.Namespace) -> int:
@@ -131,16 +135,27 @@ def _agent_run(args: argparse.Namespace) -> int:
     dataset = _dataset(args)
     if _needs_fetch(dataset):
         return 2
-    config = AgentConfig(model=args.model, max_calls=args.max_calls, budget_tokens=args.budget)
+    config = AgentConfig(
+        model=args.model,
+        max_calls=args.max_calls,
+        budget_tokens=args.budget,
+        corpus=args.corpus or CORPUS_NAMES[dataset.name],
+        mode=args.mode,
+    )
+    selection = {"evidence_only": args.evidence_only, "one_per_doc": args.one_per_doc}
     arms = ARMS if args.arm == "both" else (args.arm,)
     if args.dry_run:
-        todo = pending(dataset.questions()[: args.limit], arms, load_runs(args.out / "runs.jsonl"))
+        questions = select_questions(dataset.questions(), **selection)
+        todo = pending(questions[: args.limit], arms, load_runs(args.out / "runs.jsonl"))
         todo = todo[: args.max_runs]
         print(f"{len(todo)} runs pending in {args.out}; first command:")
         if todo:
-            print(" ".join(claude_command(config, todo[0][1], Path("mcp.json"), todo[0][0].question)))
+            prompt = prompt_for(todo[0][0], config.mode)
+            print(" ".join(claude_command(config, todo[0][1], Path("mcp.json"), prompt)))
         return 0
-    run_agent(dataset, args.out, config=config, arms=arms, limit=args.limit, max_runs=args.max_runs)
+    run_agent(
+        dataset, args.out, config=config, arms=arms, limit=args.limit, max_runs=args.max_runs, **selection
+    )
     return 0
 
 
@@ -235,6 +250,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     run.add_argument("--model", default="haiku")
     run.add_argument("--max-calls", type=int, default=10)
     run.add_argument("--budget", type=int, default=800, help="token budget for search views, both arms")
+    run.add_argument("--corpus", help="how the system prompt names the corpus (default: per dataset)")
+    run.add_argument("--mode", choices=["raw", "titled"], default="raw", help="titled: name the source doc")
+    run.add_argument("--evidence-only", action="store_true", help="only questions with located evidence")
+    run.add_argument("--one-per-doc", action="store_true", help="only the first question per gold doc")
     run.add_argument("--dry-run", action="store_true", help="show what would run, call nothing")
     run.set_defaults(func=_agent_run)
     rep = agent_sub.add_parser("report", help="paired comparison of finished runs")
