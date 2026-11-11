@@ -6,12 +6,26 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
-    { name = "Ariel A.", email = "ariel.deibe@gmail.com" }
+    { name = "Ariel A.", email = "aralde.git@gmail.com" }
 ]
 requires-python = ">=3.11"
+keywords = ["rag", "agents", "retrieval", "mcp", "llm", "document-structure"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2.14.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/aralde/subforest"
+Issues = "https://github.com/aralde/subforest/issues"
 
 [project.scripts]
 subforest = "subforest.cli:main"
