@@ -8,7 +8,7 @@ chunks, and gives the agent tools to `expand` and `read` nodes from there.
 
 > Status: alpha (0.1.0, not on PyPI yet). Builders, retrieval, MCP server and evaluation harness work and are
 > tested. Sibling project: [ragtrail](https://github.com/aralde/ragtrail), a trajectory cache for agentic RAG that
-> can use subforest node ids.
+> can use subforest node ids. The public API may change between 0.x releases.
 
 ## Attribution
 
